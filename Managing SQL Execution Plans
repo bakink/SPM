@@ -1,0 +1,494 @@
+---http://ba6.us/?q=book/export/html/223
+
+Managing SQL Execution Plans
+Summary
+SQL Profiles
+SQL Plan Baselines / Plan Stability
+Oracle Base Article: Outlines
+
+10gR1 Documentation: Plan Stability
+
+SQL Plan Management
+Oracle Whitepaper - SQL Plan Management in Oracle Database 11g - November 2010
+
+11gR1 Documentation
+
+Jonathan Lewis - SQL Plan Baselines References
+
+Useful articles from IntermediateSQL.COM Site:
+Finding SPM Baseline by SQL_ID
+
+SPM Part 1
+
+SPM Part 2
+
+SPM Part 3
+
+SPM Part 4
+
+Execution Plans
+Oracle White Paper: Explain the Explain Plan
+Auto Trace
+Setup:
+If you do not have DBA rights to the database you want to trace on then you will need to contact your DBA about creating and assigning the permissions required to Auto Trace.
+$ sqlplus "/ as sysdba"
+
+SQL*Plus: Release 11.1.0.6.0 - Production on Thu Jan 14 14:30:26 2010
+
+Copyright (c) 1982, 2007, Oracle.  All rights reserved.
+
+Connected to:
+Oracle Database 11g Enterprise Edition Release 11.1.0.6.0 - 64bit Production
+With the Partitioning, OLAP, Data Mining and Real Application Testing options
+
+SQL> @$ORACLE_HOME/sqlplus/admin/plustrce.sql
+
+
+
+SQL> GRANT PLUSTRACE TO SCOTT;
+
+Grant succeeded.
+Auto Trace Operation:
+$ sqlplus scott@db
+
+SQL*Plus: Release 11.1.0.6.0 - Production on Thu Jan 14 14:35:13 2010
+
+Copyright (c) 1982, 2007, Oracle.  All rights reserved.
+
+Enter password:
+
+Connected to:
+Oracle Database 11g Enterprise Edition Release 11.1.0.6.0 - 64bit Production
+With the Partitioning, OLAP, Data Mining and Real Application Testing options
+
+SQL> SET LINESIZE 3800
+SQL> SET TIMING ON
+SQL> SET AUTOTRACE TRACEONLY
+Now feed SQLPlus the queries you want to get Trace information on. After every query finishes you will get: 1) Elapsed time for query execution (note since we are not returning results to a client this time is not included, consider it the time to produce the first row of results) 2) Explain Plan for the query with cost information 3) Resource Usage Statistics including consistent gets Here is a ludicrously simple example:
+SQL> select * from dual;
+
+Elapsed: 00:00:00.14
+
+Execution Plan
+----------------------------------------------------------
+Plan hash value: 3543395131
+
+--------------------------------------------------------------------------
+| Id  | Operation         | Name | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------
+|   0 | SELECT STATEMENT  |      |     1 |     2 |     2   (0)| 00:00:01 |
+|   1 |  TABLE ACCESS FULL| DUAL |     1 |     2 |     2   (0)| 00:00:01 |
+--------------------------------------------------------------------------
+
+
+Statistics
+----------------------------------------------------------
+          0  recursive calls
+          0  db block gets
+          3  consistent gets
+          2  physical reads
+          0  redo size
+        224  bytes sent via SQL*Net to client
+        248  bytes received via SQL*Net from client
+          2  SQL*Net roundtrips to/from client
+          0  sorts (memory)
+          0  sorts (disk)
+          1  rows processed
+If you would like to dive further into the Explain Plan and the Estimated Costs vs the Actual Costs, check out the instructions on how to Gather Plan Statistics.
+Comparing Execution Plans
+Excellent post here on invoking the DBMS_XPLAN.DIFF_PLAN_OUTLINE API.
+DBMS_XPLAN and GATHER_PLAN_STATISTICS
+I have been making use of the GATHER_PLAN_STATISTICS hint more and more lately. In the interest of getting the most accurate data I usually log in as the user that normally executes the query. These are usually non-privileged accounts that just have access to their own objects.
+Permissions Required
+In order to use DBMS_XPLAN.DISPLAY_CURSOR in a session that does not have DBA or SELECT CATALOG ROLE, grant the following permissions to them:
+GRANT SELECT ON V_$SESSION TO MYUSER;
+GRANT SELECT ON V_$SQL TO MYUSER;
+GRANT SELECT ON V_$SQL_PLAN TO MYUSER;
+GRANT SELECT ON V_$SQL_PLAN_STATISTICS_ALL TO MYUSER;
+Now your unprivileged user has enough privileges to run GATHER_PLAN_STATISTICS:
+Gathering Execution Plan and Execution Statistics
+The great thing about GATHER_PLAN_STATISTICS is that it show E-Rows (Estimates) vs A-Rows (Actual rows visited). This is great for hunting down statistics issues, either out of date Object Statistics, or exposing limitations of the CBO (think nested subqueries - a smal error deep down in the hierarchy ends up being a big error as incorrect estimates a fed up through the chain). Also the DBMS_XPLAN output shows the actual time spent on each step in the execution plan. This can also help you pinpoint issues that need some tuning attention. The big drawback is that your SQL Statement has to be capable of finishing. If your statement will not finish then GATHER_PLAN_STATISTICS has nothing to report on.
+SQL> connect nonprivuser/pass@db
+SQL> alter session set statistics_level=ALL;
+SQL> select /*+ GATHER_PLAN_STATISTICS */ * from dual;
+SQL> SELECT * FROM TABLE(dbms_xplan.display_cursor(null, null, 'ALLSTATS LAST'));
+
+
+PLAN_TABLE_OUTPUT
+
+SQL_ID 9br385ua0jjfq, child number 0
+-------------------------------------
+select /*+ GATHER_PLAN_STATISTICS */ * from dual
+ 
+Plan hash value: 3543395131
+ 
+---------------------------------------------------------------------------------------------
+| Id | Operation     | Name | Starts | E-Rows | A-Rows |  A-Time  | Buffers | Reads |
+---------------------------------------------------------------------------------------------
+|  1 | TABLE ACCESS FULL| DUAL |   1 |   1 |   1 |00:00:00.02 |    3 |   2 |
+---------------------------------------------------------------------------------------------
+Output can also be specified as: ALLSTATS LAST +PEEKED_BINDS
+Alternate Method to Supply Hint
+Kerry Osbourne posted about this novel way of looking at GATHER_PLAN_STATISTICS hint. Basically Kerry points out if it is a hint then it can be applied via a SQL Profile without touching the existing statement.
+Alternate Method for Producing Output
+Some tools have some chatter on their database connections that might not enable you to easily or reliably get the 'LAST' execution through DBMS_XPLAN. Here is a way to add a comment when the statement is run and to use it to retrieve the SQL_ID.
+SET TIMING ON;
+SET SERVEROUTPUT OFF;
+SET TERMOUT OFF;
+SELECT /*+ gather_plan_statistics MY_CURSOR_1 */ * 
+ FROM EMP;
+SET TERMOUT ON;
+
+SELECT PLANOUTPUT.*
+ FROM gv$sql s,
+    TABLE(dbms_xplan.display_cursor(s.sql_id, s.child_number,'ALLSTATS LAST')) PLANOUTPUT
+ WHERE sql_text LIKE '%MY_CURSOR_1%';
+Note that you will want to use unique identifiers as re-using MY_CURSOR_1 over and over will cause more and more SQL statements to match the WHERE clause above and will give you unpredictable results.
+Displaying Execution Plans
+Display Most Recent Plan from PLAN_TABLE
+WITH CurrPlan AS (SELECT * FROM PLAN_TABLE WHERE TIMESTAMP=(SELECT MAX(TIMESTAMP) FROM PLAN_TABLE)) 
+select 
+  ID, 
+  lpad(' ', level-1) || 'ParID='||PARENT_ID || ':'||operation || ' (' || options || ')' "Operation", 
+  object_name "Object",
+  CurrPlan.*
+from 
+  CurrPlan
+ start with id = 0 
+connect by prior id=parent_id;
+Display from Cursor Cache
+Add a unique comment hint (like QUERYCOMMENT001 below) so we can locate the SQL easily in v$sql.
+WITH targetsql AS
+     (SELECT sql_id, child_number, sql_text
+      FROM gv$sql
+      WHERE sql_text LIKE '%QUERYCOMMENT001%' AND 
+            sql_text NOT LIKE '%PLAN_QUERY%' 
+            AND UPPER (sql_text) NOT LIKE '%XPLAN%')
+SELECT /* PLAN_QUERY */ ID, 
+       LPAD (' ', LEVEL - 1) || 'ParID=' || parent_id || ':' || operation || ' (' || options || ')' "Operation", 
+       object_name "Object", 
+       sp.*,
+       TargetSQL.*
+  FROM gv$sql_plan sp, targetsql
+ WHERE sp.sql_id = targetsql.sql_id AND sp.child_number = targetsql.child_number
+ START WITH ID = 0
+CONNECT BY PRIOR ID = parent_id;
+Display with Plan Statistics
+Add a unique comment hint (like QUERYCOMMENT001 below) so we can locate the SQL easily in v$sql. This is similar information as DBMX_XPLAN with ALLSTATS LAST option. More information is given here about query block names and such - this helps if you are trying to issue hints for specific places in your query.
+WITH TargetSQL AS
+     (SELECT sql_id, child_number, sql_text
+      FROM gv$sql
+      WHERE sql_text LIKE '%QUERYCOMMENT001%' AND 
+            sql_text NOT LIKE '%PLAN_QUERY%' 
+            AND UPPER (sql_text) NOT LIKE '%XPLAN%')
+SELECT /* PLAN_QUERY */ ID, 
+       LPAD (' ', LEVEL - 1) || 'ParID=' || parent_id || ':' || operation || ' (' || options || ')' "Operation", 
+       OBJECT_OWNER "Owner",
+       OBJECT_NAME,
+       object_alias "Alias",
+       QBLOCK_NAME, 
+       LAST_STARTS as Starts,
+       CARDINALITY as EST_ROWS,
+       LAST_OUTPUT_ROWS as ACT_ROWS,
+       TO_CHAR(LAST_ELAPSED_TIME/1000000,'9999.99') as "ElapsedSecs",
+       '|||' as "|||",
+       sp.*,
+       ts.*,
+       sps.*
+  FROM targetsql ts, 
+       gv$sql_plan sp, 
+       gv$sql_plan_statistics sps
+ WHERE ts.sql_id = sp.sql_id  
+   AND ts.child_number = sp.child_number
+   AND sp.sql_id=sps.sql_id (+)
+   AND sp.child_number=sps.child_number (+)
+   AND sp.id = sps.operation_id (+)
+ START WITH SP.ID = 0
+CONNECT BY PRIOR SP.ID = SP.parent_id;
+Static Analysis of Execution Plans
+I started working on Static Analysis of Explain Plans when presented with a 1600 line query (680 Explain Plan steps) which was running 11 hours then bombing out.
+
+Remember that Explain Plan is a "Best Guess". I usually resort to it when presented with a query that runs very long or doesn't finish because of temp space issues. If the query can finish in a reasonable amount of time I prefer to use SQL Monitoring or GATHER_PLAN_STATISTICS with DBMS_XPLAN to find exactly how long each step took.
+
+The purpose of this exercise is to hopefully try to find expensive operations that we can tackle first. Once we free up resources then we can tack the next espensive operation and so on.
+
+So how do we find possible tuning opportunities? 
+o Generate the Explain Plan
+o Query the generated Explain Plan it for Full Table Scans, costly steps, steps that will use a lot of TEMP space, etc. 
+
+
+1) Generate an Explain Plan using standard methods
+delete from plan_table where statement_id='MYSTMT';
+explain plan set statement_id='MYSTMT' for 
+select * from dual;
+2) Analyze the results
+-- Top 20 Full Table Scans sorted by Bytes Visited
+WITH MY_PLAN AS (SELECT * FROM PLAN_TABLE WHERE STATEMENT_ID='MYSTMT'),
+     OutputRows AS (
+SELECT ID, PARENT_ID, OPTIONS, OPERATION, OBJECT_OWNER, OBJECT_NAME,COST, 
+       CARDINALITY, ROUND(BYTES/1024/1024,2) as mb, FILTER_PREDICATES  
+  FROM MY_PLAN
+ WHERE OPTIONS LIKE '%FULL%'
+   AND OBJECT_TYPE IN ('MAT_VIEW','TABLE')
+ORDER BY BYTES DESC NULLS LAST)
+SELECT * FROM OutputRows where rownum  50
+ORDER BY BYTES DESC;
+
+-- Cardinality Survey (Estimated)
+WITH OUTPUTROWS AS (
+SELECT ID, PARENT_ID, OPTIONS, OPERATION, OBJECT_OWNER, OBJECT_NAME,
+       CARDINALITY, COST, ROUND(BYTES/1024/1024,2) as VISIT_MB, 
+       ROUND(TEMP_SPACE/1024/1024,2) AS TEMP_MB, 
+       ACCESS_PREDICATES||FILTER_PREDICATES AS PREDICATES
+  FROM plan_table where statement_id='MYSTMT'
+   AND CARDINALITY IS NOT NULL
+ ORDER BY CARDINALITY DESC, COST DESC)
+SELECT * FROM OUTPUTROWS WHERE rownum 
+SQL Profiles
+This is a collection of Information About SQL Profiles.
+
+SQL Profiles are useful for controlling execution plans of some Oracle SQL statements. SQL Profiles contain text of a SQL statement and hints that are applied to that statement when it is see by the optimizer. This is helpful when you need to tune code that you do not have access to and cannot change. If you are at the mercy of your calling programs, SQL Profiles may be a tool to help you get some unruly statements to behave without having to involve vendors, developers, and the friction associated with getting the original code changed.
+
+The power to lock in a plan comes with pros and cons. Honestly I try to only use them as a last resort. I have found that statements that can be whipped into submission with a SQL Profile are usually candidates for some intensive object statistics analysis first.
+
+But I do use them from time to time and the information contained in this section of my site has some notes about my common interactions with them.
+
+Note that users manipulating profiles must have ADMINISTER SQL TUNING SET privilege.
+
+References:
+Metalink Note 271196.1 "Automatic SQL Tuning - SQL Profiles" Metalnk Note 457531.1 "How To Move SQL Profiles From One Database To Another Database"
+Creating a SQL Profile Manually
+The following SQL Profile adds a FIRST_ROWS every time it sees the query specified by SELECT...%. You will need to update the WHERE Clause of the SELECT below. Verify that it returns the SQL you are expecting and that the query only returns one row.
+
+Obtain the SQL_ID of the SQL you would like to create a profile for:
+It is easier to obtain the SQL_ID instead of trying to cut and paste the text of the whole statement. Often the SQL text is too cumbersome to cut and paste reliably, so why not grab it from the sqlarea?
+
+  SELECT sql_id, 
+         sql_text 
+  FROM gv$sqlarea 
+ WHERE sql_text LIKE 'SELECT...%';
+Implement the profile:
+DECLARE
+  cl_sql_text CLOB;
+BEGIN
+
+  SELECT sql_text 
+  INTO cl_sql_text 
+  FROM gv$sqlarea where sql_id = '&myid.';
+
+  DBMS_SQLTUNE.IMPORT_SQL_PROFILE(sql_text => cl_sql_text, 
+    profile => sqlprof_attr('FIRST_ROWS'), 
+    name => 'FIRST_ROWS_TEST', 
+    category => 'DEFAULT',
+    force_match => TRUE);
+
+end;
+/
+Notes
+force_match : Ignores literals, allows SQL Profile to be applied to multiple versions of the same statement. This can be likened to the CURSOR_SHARING instance parameter which allows the optimizer to replace literals with bind variable placeholders. This allows the a single SQL Profile to be used for SQL statements with the same syntax but are submitted with literal values instead of Bind Variables.
+
+sqlprof_attr can take any hint as input. In this case I kept it simple but you can take the text from between the /*+ ... */ hint separators and paste it into the sqlprof_attr parameter.
+
+Enabling/Disabling/Deleting a SQL Profile
+CDB and PDB Scope
+It looks like PDBs and CDBs can own SQL Profiles. Use DBA_SQL_PROFILES view in a PDB and CDB_SQL_PROFILES view in the CDB to review SQL profiles.
+
+If you log into the CDB with Cloud Control then it looks like all profile work will be done on the CDB level. Just be aware of this - if you create a SQL Profile in a PDB manually using a script like coe_xfr_sql_profile.sql, you may not be able to administrate it with the Cloud Control GUI.
+
+Viewing
+Profile Summary
+-- Traditional DB or PDB
+SELECT * FROM DBA_SQL_PROFILES;
+
+-- Container database, note the CON_ID will show which DB the profiles are owned by
+SELECT * FROM CDB_SQL_PROFILES;
+Profile Attribute Detail
+SELECT *
+  FROM DBA_SQL_PROFILES prof, 
+       DBMSHSXP_SQL_PROFILE_ATTR attr
+  WHERE prof.NAME=attr.PROFILE_NAME
+  ORDER BY prof.name,
+           attr.attr_number;
+Enable/Disable
+Locate the name of the SQL Profile you would like to disable and plug it in to the following statement:
+-- Enable an existing profile:
+EXEC DBMS_SQLTUNE.ALTER_SQL_PROFILE('PROFILE_NAME','STATUS','DISABLED');
+
+-- Disabling an existing profile:
+EXEC DBMS_SQLTUNE.ALTER_SQL_PROFILE('PROFILE_NAME','STATUS','DISABLED');
+Dropping a SQL Profile
+EXEC DBMS_SQLTUNE.DROP_SQL_PROFILE('PROFILE_NAME');
+Links
+Jonathan Lewis SQL Profiles (10g)
+Transporting SQL Profiles Between Databases
+Following 457531.1 Transporting the SQL Profile ====================
+i) Creating a staging table to store the SQL Profiles
+SQL> exec DBMS_SQLTUNE.CREATE_STGTAB_SQLPROF (table_name=>'TEST',schema_name=>'SCOTT'); 
+
+PL/SQL procedure successfully completed. 
+table_name => name of the table to store the SQL Profiles. schema_name => name of the user where the table is to be created.
+ii) Packing the SQL Profiles to the staging table
+SQL> EXEC DBMS_SQLTUNE.PACK_STGTAB_SQLPROF (staging_table_name => 'TEST',profile_name=>'my_sql_profile'); 
+
+PL/SQL procedure successfully completed. 
+staging_table_name => name of the table to store the SQL Profiles. profile_name => name of the SQL Profile to be packed. Note: The table_name and schema_name are case-sensitive.
+SQL> desc test 
+Name Null? Type 
+----------------------------------------------------------------- -------- -------------------------------------------- 
+PROFILE_NAME VARCHAR2(30) 
+CATEGORY VARCHAR2(30) 
+SIGNATURE NUMBER 
+SQL_TEXT CLOB 
+DESCRIPTION VARCHAR2(500) 
+TYPE VARCHAR2(9) 
+STATUS VARCHAR2(8) 
+BOOLEAN_FLAGS NUMBER 
+ATTRIBUTES SQLPROF_ATTR 
+VERSION NUMBER 
+SPARE1 CLOB 
+SPARE2 BLOB 
+
+SQL> select count(*) from test; 
+
+COUNT(*) 
+---------- 
+1 
+
+SQL> set autot on 
+SQL> select /*+ no_index(emp pk_emp) */ * from emp where empno=7839; 
+
+EMPNO ENAME JOB MGR HIREDATE SAL COMM DEPTNO 
+---------- ---------- --------- ---------- --------- ---------- ---------- ---------- 
+7839 KING PRESIDENT 17-NOV-81 5000 10 
+
+
+Execution Plan 
+---------------------------------------------------------- 
+Plan hash value: 2949544139 
+
+-------------------------------------------------------------------------------------- 
+| Id | Operation | Name | Rows | Bytes | Cost (%CPU)| Time | 
+-------------------------------------------------------------------------------------- 
+| 0 | SELECT STATEMENT | | 1 | 31 | 1 (0)| 00:00:01 | 
+| 1 | TABLE ACCESS BY INDEX ROWID| EMP | 1 | 31 | 1 (0)| 00:00:01 | 
+|* 2 | INDEX UNIQUE SCAN | PK_EMP | 1 | | 0 (0)| 00:00:01 | 
+-------------------------------------------------------------------------------------- 
+
+Predicate Information (identified by operation id): 
+--------------------------------------------------- 
+
+2 - access("EMPNO"=7839) 
+
+Note 
+----- 
+- SQL profile "my_sql_profile" used for this statement 
+iii) Now export the table using Datapump or Export/Import.
+[oracle@localhost oracle]$ exp scott/tiger tables=test 
+
+Export: Release 10.2.0.3.0 - Production on Fri Sep 7 01:18:06 2007 
+
+Copyright (c) 1982, 2005, Oracle. All rights reserved. 
+
+
+Connected to: Oracle Database 10g Enterprise Edition Release 10.2.0.3.0 - Production 
+With the Partitioning and Data Mining options 
+Export done in US7ASCII character set and AL16UTF16 NCHAR character set 
+
+About to export specified tables via Conventional Path ... 
+. . exporting table TEST 1 rows exported 
+Export terminated successfully without warnings. 
+iv) Execute the query in another database without SQL Profiles
+SQL> select /*+ no_index(emp pk_emp) */ * from emp where empno=7839; 
+
+EMPNO ENAME JOB MGR HIREDATE SAL COMM DEPTNO 
+---------- ---------- --------- ---------- --------- ---------- ---------- ---------- 
+7839 KING PRESIDENT 17-NOV-81 5000 10 
+
+
+Execution Plan 
+---------------------------------------------------------- 
+Plan hash value: 3956160932 
+
+-------------------------------------------------------------------------- 
+| Id | Operation | Name | Rows | Bytes | Cost (%CPU)| Time | 
+-------------------------------------------------------------------------- 
+| 0 | SELECT STATEMENT | | 4 | 348 | 3 (0)| 00:00:01 | 
+|* 1 | TABLE ACCESS FULL| EMP | 4 | 348 | 3 (0)| 00:00:01 | 
+-------------------------------------------------------------------------- 
+
+Predicate Information (identified by operation id): 
+--------------------------------------------------- 
+
+1 - filter("EMPNO"=7839) 
+Note: The SQL Profiles are not there.
+v) Importing the SQL Profiles to the database
+[oracle@localhost oracle]$ imp scott/tiger file=expdat.dmp full=y 
+
+Import: Release 10.2.0.3.0 - Production on Fri Sep 7 01:24:15 2007 
+
+Copyright (c) 1982, 2005, Oracle. All rights reserved. 
+
+
+Connected to: Oracle Database 10g Enterprise Edition Release 10.2.0.3.0 - Production 
+With the Partitioning and Data Mining options 
+
+Export file created by EXPORT:V10.02.01 via conventional path 
+import done in US7ASCII character set and AL16UTF16 NCHAR character set 
+. importing SCOTT's objects into SCOTT 
+. importing SCOTT's objects into SCOTT 
+. . importing table "TEST" 1 rows imported 
+Import terminated successfully without warnings. 
+vi) Now Unpack the SQL Profiles
+SQL> conn scott/tiger /* connect to scott schema where the staging table is imported and then unpack */
+
+SQL> EXEC DBMS_SQLTUNE.UNPACK_STGTAB_SQLPROF(replace => TRUE,staging_table_name => 'TEST');
+
+PL/SQL procedure successfully completed. 
+vii) Checking the SQL Profiles
+SQL> select /*+ no_index(emp pk_emp) */ * from emp where empno=7839; 
+
+EMPNO ENAME JOB MGR HIREDATE SAL COMM DEPTNO 
+---------- ---------- --------- ---------- --------- ---------- ---------- ---------- 
+7839 KING PRESIDENT 17-NOV-81 5000 10 
+
+
+Execution Plan 
+---------------------------------------------------------- 
+Plan hash value: 2949544139 
+
+-------------------------------------------------------------------------------------- 
+| Id | Operation | Name | Rows | Bytes | Cost (%CPU)| Time | 
+-------------------------------------------------------------------------------------- 
+| 0 | SELECT STATEMENT | | 1 | 31 | 1 (0)| 00:00:01 | 
+| 1 | TABLE ACCESS BY INDEX ROWID| EMP | 1 | 31 | 1 (0)| 00:00:01 | 
+|* 2 | INDEX UNIQUE SCAN | PK_EMP | 1 | | 0 (0)| 00:00:01 | 
+-------------------------------------------------------------------------------------- 
+
+Predicate Information (identified by operation id): 
+--------------------------------------------------- 
+
+2 - access("EMPNO"=7839) 
+
+Note 
+----- 
+- SQL profile "my_sql_profile" used for this statement 
+Now the SQL Profile is transported to another database.
+Using an existing plan as a model for a SQL Profile
+The following articles cover info about and usage of coe_xfr_sql_profile.sql which is supplied with the SQLT package from Oracle.
+
+http://kerryosborne.oracle-guy.com/2010/07/sqlt-coe_xfr_sql_profilesql/
+
+http://kerryosborne.oracle-guy.com/scripts/coe_xfr_sql_profile.sql
+
+http://carlos-sierra.net/2012/04/09/custom-sql-profile-and-plan-stabilit...
+
+Viewing Details of a SQL Profile
+The following query will show the details of the most recently created SQL Profiles first. Each component hint of the Profile is returned one per row.
+SELECT CREATED, PROFILE_NAME, ATTR_VALUE, SQL_TEXT 
+  FROM DBA_SQL_PROFILES PROF, 
+       DBMSHSXP_SQL_PROFILE_ATTR ATTR
+ WHERE PROF.NAME=ATTR.PROFILE_NAME
+ ORDER BY CREATED DESC, NAME, ATTR_NUMBER;
+Subquery Info
+Optimizer Decisions
+Great article from Oracle Optimizer team covering Subquery Unnesting including mechanics and limitations of Optimizer Subquery Unnesting: Part 1 | Part 2
