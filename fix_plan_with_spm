@@ -1,3 +1,5 @@
 --https://blog.dbi-services.com/how-to-fix-your-own-sql-plan-in-oracle/
 --https://sqlmaria.com/2020/02/25/how-to-use-a-sql-plan-baseline-or-a-sql-patch-to-add-optimizer-hints/
 --https://sites.google.com/site/santoshyandhe/force-baseline-for-different-sql-id
+--https://mikedietrichde.com/hol-19c-sql-plan-management/
+--https://carlos-sierra.net/category/plan-stability/
