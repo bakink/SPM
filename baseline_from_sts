@@ -1,0 +1,38 @@
+SELECT p.*
+FROM TABLE (DBMS_SQLTUNE.SELECT_WORKLOAD_REPOSITORY(150820,150820,' sql_id = ''bs2vdd4qjktwa'' and plan_hash_value= ''1691502390'' ')) p;--Sqlidsi bn03q0q8wf40v olan plan hash valuesu 2958546515 olan planı al.***
+DECLARE
+stscur dbms_sqltune.sqlset_cursor;
+BEGIN
+OPEN stscur FOR
+SELECT VALUE(P)
+FROM TABLE (DBMS_SQLTUNE.SELECT_CURSOR_CACHE(
+' sql_id = ''bn03q0q8wf40v'' and plan_hash_value= ''2958546515'' ',
+NULL,
+NULL,
+NULL,
+NULL,
+NULL,
+NULL,
+'ALL')) p;
+-- populate the sqlset
+dbms_sqltune.load_sqlset(
+sqlset_owner => 'SYS',
+sqlset_name => 'INTBANK_STS',
+populate_cursor => stscur,
+load_option => 'MERGE',
+update_option => 'REPLACE',
+update_attributes => 'ALL');
+END;
+/
+--STSi sorgula ***
+SELECT * FROM TABLE (DBMS_SQLTUNE.SELECT_SQLSET (sqlset_owner=>'SYSTEM', sqlset_name=>'SPM_STS_BN03Q0Q8WF40V'));--upgradeden sonra STSden planları yükle.
+
+set serveroutput on
+declare
+   l_num_plans PLS_INTEGER;
+begin
+l_num_plans := DBMS_SPM.LOAD_PLANS_FROM_SQLSET (sqlset_name=> 'INTBANK_STS',sqlset_owner=>'SYS' ,basic_filter=>'sql_id=''7pffat32vt414'' and plan_hash_value=2415708703');
+DBMS_OUTPUT.put_line('Number of plans loaded: ' || l_num_plans);
+end;
+/
+exit
