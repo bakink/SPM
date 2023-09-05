@@ -1,0 +1,29 @@
+DECLARE
+  l_patch_name  VARCHAR2(100);
+BEGIN
+  l_patch_name := SYS.DBMS_SQLDIAG.create_sql_patch(
+    sql_id    => '48bdt6wqtar13',
+    hint_text => 'index(@"SEL$1" "PIN_REQUEST_PRODUCE_EVENT" "IDX_PIN_REQUEST_PRODUCE_01")',
+    name      => 'SQL_Patch_48bdt6wqtar13');
+END;
+/
+
+exec DBMS_SQLDIAG.DROP_SQL_PATCH('SQL_Patch_bvdyfkgasuks9');
+ 
+select name, CATEGORY, SIGNATURE, CREATED, status , SQL_TEXT from dba_sql_patches where name='SQL_Patch_086u8d3zrrw84';
+
+      OUTLINE_LEAF(@"SEL$1")
+      FULL(@"SEL$1" "TRANSACTION_PRODUCE_EVENTS"@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+SQL_ID  48bdt6wqtar13, child number 0
+      OPT_PARAM('_optimizer_nlj_hj_adaptive_join' 'false')
+      OPT_PARAM('_fix_control' '17443547:0')
+      ALL_ROWS
+      OUTLINE_LEAF(@"SEL$1")
+      FULL(@"SEL$1" "PIN_REQUEST_PRODUCE_EVENT"@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$1")
+      END_OUTLINE_DATA
+  */
