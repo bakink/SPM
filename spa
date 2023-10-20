@@ -1,0 +1,310 @@
+1... cache 
+EXEC DBMS_SQLTUNE.CREATE_SQLSET (sqlset_name => 'COMP19c_STS');
+
+DECLARE
+cur sys_refcursor;
+BEGIN
+open cur for
+select value(p) from table(dbms_sqltune.select_cursor_cache(
+basic_filter=>'parsing_schema_name=''OC_SYS'' and sql_text not like ''%/* OPT_DYN_SAMP */%''',
+ranking_measure1 => 'Executions',
+result_limit => 400
+)
+) p;
+dbms_sqltune.load_sqlset('COMP19c_STS', cur);
+close cur;
+END;
+/
+
+
+select count(*) from DBA_SQLSET_plans where sqlset_name ='COMP19c_STS';
+
+BEGIN
+DBMS_SQLTUNE.CREATE_STGTAB_SQLSET (
+table_name => 'COMPATIBLE_STS_TAB'
+, schema_name => 'MASTER');
+END;
+/
+
+BEGIN
+DBMS_SQLTUNE.PACK_STGTAB_SQLSET (
+sqlset_name => 'COMP19c_STS'
+, sqlset_owner => 'MASTER'
+, staging_table_name => 'COMPATIBLE_STS_TAB'
+, staging_schema_owner => 'MASTER');
+END;
+/
+
+
+expdp master/masmona321 DIRECTORY=RAT_CAPTURE_DIR DUMPFILE=COMPATIBLE_STS_TAB.dmp TABLES=MASTER.COMPATIBLE_STS_TAB
+
+
+--precard 
+
+impdp master/masmona321 DIRECTORY=RAT_CAPTURE_DIR DUMPFILE=COMPATIBLE_STS_TAB.dmp TABLES=MASTER.COMPATIBLE_STS_TAB
+
+
+
+BEGIN
+DBMS_SQLTUNE.UNPACK_STGTAB_SQLSET (
+sqlset_name => 'COMP19c_STS'
+, replace => true
+, staging_table_name => 'COMPATIBLE_STS_TAB'
+, staging_schema_owner => 'MASTER');
+END;
+/
+
+
+select count(*) from DBA_SQLSET_plans where sqlset_name ='COMP19c_STS';
+
+
+VARIABLE task_name VARCHAR2(100);
+EXEC :task_name := DBMS_SQLPA.CREATE_ANALYSIS_TASK( -
+sqlset_name => 'COMP19c_STS' -
+, task_name => 'COMP19c_STS_TASK');
+
+exec DBMS_SQLPA.SET_ANALYSIS_TASK_PARAMETER(task_name=> 'COMP19c_STS_TASK', parameter=>'LOCAL_TIME_LIMIT', value=>5);         
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK (
+task_name => 'COMP19c_STS_TASK'
+,execution_type => 'convert sqlset'
+,execution_name => 'OC_SYS_top400_CARDLIVE');
+END;
+/
+
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK (
+task_name => 'COMP19c_STS_TASK'
+,execution_type => 'TEST EXECUTE'
+,execution_name => 'OC_SYS_top400_PRE_CARDLIVE');
+END;
+/
+
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK(
+task_name => 'COMP19c_STS_TASK'
+,execution_type => 'compare performance'
+,execution_params => dbms_advisor.arglist('execution_name1'
+,'OC_SYS_top400_CARDLIVE'
+,'execution_name2'
+,'OC_SYS_top400_PRE_CARDLIVE'));
+END;
+/
+
+
+
+EXEC DBMS_SQLPA.INTERRUPT_ANALYSIS_TASK('COMP19c_STS_TASK');
+exec DBMS_SQLPA.DROP_ANALYSIS_TASK('COMP19c_STS_TASK');
+
+set long 1000000 longchunksize 1000000 linesize 500 head off feedback off echo off
+spool /tmp/report_exec_500.html
+SELECT dbms_sqlpa.report_analysis_task('COMP19c_STS_TASK', 'HTML', 'ALL','ALL') FROM dual;
+spool off
+
+
+2.. from AWR
+
+Merhabalar,
+
+1 numaralı olan bir sunucudan başka bir sunucuya taşınırken kullanılacak olandır. 2. Olan ise aynı sunucu üzerinde bir işlem yapılacak ise.
+
+Bir problem olursa tekrar haberleşelim.
+
+1-)
+EXEC DBMS_SQLTUNE.CREATE_SQLSET (sqlset_name => 'CCIDENTITY_top400_STS');
+DECLARE
+cur DBMS_SQLTUNE.SQLSET_CURSOR;
+BEGIN
+OPEN cur FOR
+SELECT VALUE(P)
+FROM table(
+DBMS_SQLTUNE.SELECT_WORKLOAD_REPOSITORY(
+begin_snap => 70571,
+end_snap => 70590,
+basic_filter => 'upper(sql_text) LIKE ''%NWB_CCIDENTITY%'' and parsing_schema_name = ''TEXANLIVE''',
+ranking_measure1 => 'Executions',
+result_limit => 400)) P;
+DBMS_SQLTUNE.LOAD_SQLSET(sqlset_name => 'CCIDENTITY_top400_STS',
+populate_cursor => cur);
+END;
+/
+
+select count(*) from DBA_SQLSET_plans where sqlset_name ='CCIDENTITY_top400_STS';
+
+BEGIN
+DBMS_SQLTUNE.CREATE_STGTAB_SQLSET (
+table_name => 'CCIDENTITY_top400'
+, schema_name => 'MASTER');
+END;
+/
+
+BEGIN
+DBMS_SQLTUNE.PACK_STGTAB_SQLSET (
+sqlset_name => 'CCIDENTITY_top400_STS'
+, sqlset_owner => 'GLOBAL_SPACE'
+, staging_table_name => 'CCIDENTITY_top400'
+, staging_schema_owner => 'MASTER');
+END;
+/
+
+expdp \"/ as sysdba\" DIRECTORY=AWR_REPORTS_DIR DUMPFILE=CCIDENTITY_top400.dmp TABLES=MASTER.CCIDENTITY_top400
+
+"
+---Adrasan---
+sftp> cd /tmp/
+sftp> lcd C:\Users\U090820\Desktop
+sftp> get STS_EXEC_500.dmp 
+Downloading STS_EXEC_500.dmp from /tmp/STS_EXEC_500.dmp
+45% 1182KB 591KB/s 00:00:02 ETA
+
+---Ural--- 
+sftp> cd /tmp/
+sftp> lcd C:\Users\U090820\Desktop
+sftp> put STS_EXEC_500.dmp 
+
+impdp \"/ as sysdba\" DIRECTORY=AWR_REPORTS_DIR DUMPFILE=CCIDENTITY_top400.dmp TABLES=MASTER.CCIDENTITY_top400
+
+"
+
+alter session set current_schema=GLOBAL_SPACE;
+
+Session altered.
+
+BEGIN
+DBMS_SQLTUNE.UNPACK_STGTAB_SQLSET (
+sqlset_name => 'CCIDENTITY_top400_STS'
+, replace => true
+, staging_table_name => 'CCIDENTITY_top400'
+, staging_schema_owner => 'MASTER');
+END;
+/
+
+PL/SQL procedure successfully completed.
+
+
+
+select count(*) from DBA_SQLSET_plans where sqlset_name ='CCIDENTITY_top400_STS';
+
+COUNT(*)
+----------
+3480
+
+VARIABLE task_name VARCHAR2(100);
+EXEC :task_name := DBMS_SQLPA.CREATE_ANALYSIS_TASK( -
+sqlset_name => 'CCIDENTITY_top400_STS' -
+, task_name => 'CCIDENTITY_top400_TASK');
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK (
+task_name => 'CCIDENTITY_top400_TASK'
+,execution_type => 'convert sqlset'
+,execution_name => 'CCIDENTITY_top400_adrasan');
+END;
+/
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK (
+task_name => 'CCIDENTITY_top400_TASK'
+,execution_type => 'TEST EXECUTE'
+,execution_name => 'CCIDENTITY_top400_ural');
+END;
+/
+
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK(
+task_name => 'CCIDENTITY_top400_TASK'
+,execution_type => 'compare performance'
+,execution_params => dbms_advisor.arglist('execution_name1'
+,'CCIDENTITY_top400_adrasan'
+,'execution_name2'
+,'CCIDENTITY_top400_ural'));
+END;
+/
+
+
+
+
+set long 1000000 longchunksize 1000000 linesize 500 head off feedback off echo off
+spool report_exec_500.html
+SELECT dbms_sqlpa.report_analysis_task('CCIDENTITY_top400_TASK', 'HTML', 'ALL','ALL') FROM dual;
+spool off
+
+What Kind of SQL Statement is Not Supported by SQL Performance Analyzer(SPA)? (Doc ID 2435436.1)
+
+2-)
+EXEC DBMS_SQLTUNE.CREATE_SQLSET (sqlset_name => 'CCIDENTITY_top400_STS');
+DECLARE
+cur DBMS_SQLTUNE.SQLSET_CURSOR;
+BEGIN
+OPEN cur FOR
+SELECT VALUE(P)
+FROM table(
+DBMS_SQLTUNE.SELECT_WORKLOAD_REPOSITORY(
+begin_snap => 70571,
+end_snap => 70590,
+basic_filter => 'upper(sql_text) LIKE ''%NWB_CCIDENTITY%'' and parsing_schema_name = ''TEXANLIVE''',
+ranking_measure1 => 'Executions',
+result_limit => 400)) P;
+DBMS_SQLTUNE.LOAD_SQLSET(sqlset_name => 'CCIDENTITY_top400_STS',
+populate_cursor => cur);
+END;
+/
+
+select count(*) from DBA_SQLSET_plans where sqlset_name ='CCIDENTITY_top400_STS';
+
+VARIABLE task_name VARCHAR2(100);
+EXEC :task_name := DBMS_SQLPA.CREATE_ANALYSIS_TASK( -
+sqlset_name => 'CCIDENTITY_top400_STS' -
+, task_name => 'CCIDENTITY_top400_TASK');
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK (
+task_name => 'CCIDENTITY_top400_TASK'
+,execution_type => 'TEST EXECUTE'
+,execution_name => 'CCIDENTITY_top400_adrasan');
+END;
+/
+
+
+-----index ekleniyor-----
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK (
+task_name => 'CCIDENTITY_top400_TASK'
+,execution_type => 'TEST EXECUTE'
+,execution_name => 'CCIDENTITY_top400_ural');
+END;
+/
+
+BEGIN
+DBMS_SQLPA.EXECUTE_ANALYSIS_TASK(
+task_name => 'CCIDENTITY_top400_TASK'
+,execution_type => 'compare performance'
+,execution_params => dbms_advisor.arglist('execution_name1'
+,'CCIDENTITY_top400_adrasan'
+,'execution_name2'
+,'CCIDENTITY_top400_ural'));
+END;
+/
+
+
+set long 1000000 longchunksize 1000000 linesize 500 head off feedback off echo off
+spool report_exec_500.html
+SELECT dbms_sqlpa.report_analysis_task('CCIDENTITY_top400_TASK', 'HTML', 'ALL','ALL') FROM dual;
+spool off
+
+İyi çalışmalar..
+
+Mehmet Erman Yanık
+Kıdemli Sistem Mühendisi
+Veri Tabanı Yönetimi
+Yapı Kredi Teknoloji
+
+ 
+Yapı ve Kredi Bankası A.Ş.
+Telefon: 
+E: erman.yanik@ykteknoloji.com.tr
