@@ -1,0 +1,408 @@
+
+---SPM FROM AWR
+variable x number
+BEGIN
+    :x := dbms_spm.load_plans_from_awr(
+             begin_snap   => 387834,
+             end_snap     => 387835,
+             basic_filter => q'# sql_id='6vvxk9c5hjx3m' and plan_hash_value='2473446530' #',fixed => 'YES');
+END;
+/
+print x
+
+387835	3	18/02/2024 13:45:13,524	6vvxk9c5hjx3m	2473446530
+387837	3	18/02/2024 14:15:21,716	6vvxk9c5hjx3m	2473446530
+
+EOC_CURRENT_STATEMENT_DETAIL
+EOC_CURRENT_STATEMENT_SUMMARY
+
+
+
+
+380880	3	8/12/2023 03:00:27,974	100mbh38sug5k	4091765328	1	1286,253087	16227342
+
+
+
+
+
+
+
+364273	1	18/06/2023 02:45:12,576	an1hapbcstvsy	3561063970
+364274	1	18/06/2023 03:00:21,241	an1hapbcstvsy	3561063970
+
+
+
+360935	2	14/05/2023 08:15:14,371	3uv66dm6mqbyx	1559202916
+362927	4	4/06/2023 02:15:17,952	3j94d6npdds9m	2512569922
+362928	4	4/06/2023 02:30:36,175	3j94d6npdds9m	2512569922
+
+
+350862	4	29/01/2023 10:00:19,838	3uv66dm6mqbyx	3884344082
+352917	4	19/02/2023 19:45:21,034	3uv66dm6mqbyx	1268990910
+353547	2	26/02/2023 09:15:30,738	3uv66dm6mqbyx	1268990910
+354930	4	12/03/2023 19:00:05,303	3uv66dm6mqbyx	3884344082
+356675	3	30/03/2023 23:15:10,262	fwxzmg80g2b95	646282148
+357577	1	9/04/2023 08:45:03,532	7y085b4y4u0r7	1072745663
+357578	1	9/04/2023 09:00:08,066	7y085b4y4u0r7	1072745663
+360264	3	7/05/2023 08:30:03,746	8rc0fvyk8qycy	8rc0fvyk8qycy
+356932	2	2/04/2023 15:30:05,372	2w0a89fkduqv0	2576157713
+
+
+
+
+f9pu85bk8zg25	1	1339355276
+
+
+
+
+
+
+
+
+---SPM FROM CACHE
+variable cnt number
+BEGIN
+    :cnt := DBMS_SPM.LOAD_PLANS_FROM_CURSOR_CACHE(sql_id => '0nnmfcg9vpady', plan_hash_value =>'1688354120', fixed => 'YES', enabled => 'YES');
+END;
+/
+print cnt
+
+caqggc67169qs	0	2034914882
+0nnmfcg9vpady 1688354120
+8qvpfj4ujtvdz	0	1861301647
+
+
+
+
+buu4aw61nhq5t	1	1386738417
+
+
+
+
+
+
+
+8mb2wyhqy871n	0	3299161028
+fsbg7yx8mcndn	0	3973530345
+fsbg7yx8mcndn	0	3973530345
+
+
+5h1802nyha1km	0	4184649508
+440uck21bfur2	0	85658656
+
+
+a7nknbm943tfm	0	4240946975
+7nwwc8vpjdxy0	1	456079779
+1q4vhjxrf4zzh	0	2499948362
+
+62n62htg4smhv	1	2737675313
+aw9xkmy2nvfsv	1	3756777981
+amzu0b6hh6fxa	0	129180789
+cvd4mfc7rqr5g	0	2907862442
+0jw82rauxapn2	0	2696581009
+bv8sa4zxuq044	1	1248665818
+
+
+63x83x3tfymtq	1	2034914882
+
+42j1n9k922tk7	0	2465789885
+62n62htg4smhv	1	2737675313
+f839gzsuctnyh	2	1897673904
+
+cvyhr6tka6xqq	0	2465789885
+433g1jj5428w1
+g6avd6f02r82m
+g6avd6f02r82m            1 3850513383
+7bk0yzwaajvbc	1	646282148
+3uv66dm6mqbyx	0	1268990910
+0np6pbpq5kgc0	0	1401145576 
+
+59p671ghy58g6	1	2637554396
+8rc0fvyk8qycy
+9zj59x74146qg	0	173789563
+
+93x4qstnnr9yd	1	517423420
+
+
+
+fcucczxd6h9qu	0	3282485589
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---SPM from STS
+
+1.Problemli uzun süren sorgu bulunur.
+select s.last_call_et, s.sql_id, s.sql_hash_value, s.*
+from gv$session s
+where schemaname='TICKTRADE' and status='ACTIVE' 
+--and sid=3827
+--and sql_id='2wrhffsf5m1s1'
+
+
+2.STS den düzgün planı bulunur.
+
+--veritabanındaki tüm stslerden ara.
+select sqlset_owner, sqlset_name, sql_id, plan_hash_value, substr(sql_text,1, 15) text, 
+executions execs,
+(elapsed_time/1000000)/decode(nvl(executions,0),0,1,executions) avg_etime,  --seconds
+trunc(decode(executions, 0, 0, cpu_time/executions/1000000)) cpu_time_avg,   --seconds
+ first_load_time,  
+trunc(decode(executions, 0, 0, rows_processed/executions)) rows_avg,
+trunc(decode(executions, 0, 0, fetches/executions)) fetches_avg, 
+ trunc(decode(executions, 0, 0, disk_reads/executions)) disk_reads_avg,
+ --trunc(decode(executions, 0, 0, buffer_gets/executions)) buffer_gets_avg, 
+ buffer_gets/decode(nvl(executions,0),0,1,executions) avg_lio
+from dba_sqlset_statements
+where --sql_id='dmnab0y9mk43v'
+sql_id='gh97vdksb1z06' 
+order by avg_etime asc;
+
+
+select plan_hash_value from MASTER.INTBANK_STS_T
+where sql_id='b1kb2hhtcv5g1'
+
+
+select * from MASTER.STS_for_upgrade_t where sql_id='cjv4yx1y6sxj2'
+
+select * from dba_tables where table_name like '%STS%'
+
+
+3. STS deki plan set edilir.
+
+select * from DBA_SQLSET_STATEMENTS where sql_id='8jntkftj1m0gk'
+
+---SPM FROM STS
+set serveroutput on
+
+declare
+l_num_plans PLS_INTEGER;
+begin
+l_num_plans := DBMS_SPM.LOAD_PLANS_FROM_SQLSET (sqlset_name=> 'OC_SYS_19C_X9M',sqlset_owner=>'MASTER' ,basic_filter=>'sql_id=''41f61q6qw8442'' and plan_hash_value=169030425');
+DBMS_OUTPUT.put_line('Number of plans loaded: ' || l_num_plans);
+end;
+/
+
+declare
+l_num_plans PLS_INTEGER;
+begin
+l_num_plans := DBMS_SPM.LOAD_PLANS_FROM_SQLSET (sqlset_name=> 'OC_SYS_19C_X9M',sqlset_owner=>'MASTER' ,basic_filter=>'sql_id=''41f61q6qw8442'' and plan_hash_value=169030425',fixed=>'YES');
+DBMS_OUTPUT.put_line('Number of plans loaded: ' || l_num_plans);
+end;
+/
+
+Plan baseline oluşmuş mu kontrol et.
+
+SELECT 
+created, p.*
+  FROM sys.dba_sql_plan_baselines p
+order by p.created  desc
+
+
+planı fixlemek için
+
+SET SERVEROUTPUT ON
+DECLARE
+  l_plans_altered  PLS_INTEGER;
+BEGIN
+  l_plans_altered := DBMS_SPM.alter_sql_plan_baseline(
+    sql_handle      => 'SQL_ccc3b39ea185fc8a',
+    plan_name       => 'SQL_PLAN_cthxmmuhsbz4a4fc45fb3',
+    attribute_name  => 'fixed',
+    attribute_value => 'YES');
+
+  DBMS_OUTPUT.put_line('Plans Altered: ' || l_plans_altered);
+END;
+/
+
+SELECT PLAN_TABLE_OUTPUT FROM TABLE (DBMS_XPLAN.DISPLAY_SQL_PLAN_BASELINE('SQL_99b16d2ca3518ac8',null,'TYPICAL'));
+
+
+4. sql baselini kullanmış mı kontrol et.
+ 
+select sql_plan_baseline from v$sql where sql_id='cjv4yx1y6sxj2'
+
+select inst_id, sql_id, child_number, plan_hash_value, executions execs,
+(elapsed_time/1000000)/decode(nvl(executions,0),0,1,executions) avg_etime,  --seconds
+ sql_fulltext, sql_text, 
+  trunc(decode(executions, 0, 0, cpu_time/executions/1000000)) cpu_time_avg,   --seconds
+ first_load_time, last_load_time, 
+ outline_category, sql_profile, sql_plan_baseline,
+ trunc(decode(executions, 0, 0, rows_processed/executions)) rows_avg,
+ trunc(decode(executions, 0, 0, fetches/executions)) fetches_avg, 
+ trunc(decode(executions, 0, 0, disk_reads/executions)) disk_reads_avg,
+ buffer_gets/decode(nvl(executions,0),0,1,executions) avg_lio,
+ trunc(decode(executions, 0, 0, application_wait_time/executions/1000000)) apwait_time_avg,
+ trunc(decode(executions, 0, 0, concurrency_wait_time/executions/1000000)) cwait_time_avg, 
+ trunc(decode(executions, 0, 0, cluster_wait_time/executions/1000000)) clwait_time_avg, 
+ trunc(decode(executions, 0, 0, user_io_wait_time/executions/1000000)) iowait_time_avg,
+ trunc(decode(executions, 0, 0, plsql_exec_time/executions/1000000)) plsexec_time_avg,
+ trunc(decode(executions, 0, 0, java_exec_time/executions/1000000)) javexec_time_avg 
+ from gv$sql s
+ where sql_id in ('gh97vdksb1z06','1s2awnqn81h5g','9ab0g19h0yss8') --bu sqller plan baselineı kullanmıyor...
+ --and (elapsed_time/1000000)/decode(nvl(executions,0),0,1,executions) >10
+ --upper(sql_text) like upper('%select rtop_option_no INTO vText from cbslive.rtop where rtop_rep_name%')
+ --and sql_text not like '%gv$sql%' --and sql_text not like '%EXPLAIN%'
+ --order by executions desc,last_load_time desc, s.sql_id, s.child_number
+ --order by avg_etime desc
+ order by last_active_time
+
+
+
+--plan baselineı drop etmek için
+SET SERVEROUTPUT ON
+DECLARE
+  l_plans_altered  PLS_INTEGER;
+BEGIN
+  l_plans_altered := DBMS_SPM.drop_sql_plan_baseline(
+    sql_handle      => 'SQL_99b16d2ca3518ac8',
+    plan_name       => 'SQL_PLAN_9mcbd5kjp32q86f1d719d');
+  DBMS_OUTPUT.put_line('Plans Altered: ' || l_plans_altered);
+END;
+/
+
+
+
+--copy baseline
+
+
+iyi :  cb7urhwnw9agv, child number 0
+Plan hash value: 1848253860
+
+--b1x2hpq8bm8vk	0	2476666977  --kotu
+1u6fr701t5uhr - 2502319790  --iyi
+
+
+
+-1..--SPM FROM CACHE  --orjinal sql
+variable cnt number
+BEGIN
+    :cnt := DBMS_SPM.LOAD_PLANS_FROM_CURSOR_CACHE(sql_id => '086u8d3zrrw84', plan_hash_value =>'2351256845', fixed => 'NO', enabled => 'NO');
+END;
+/
+print cnt
+
+086u8d3zrrw84	1	2351256845  --kotu
+
+2ndmc3n93dqfs --iyi
+set feedback ON SQL_ID 
+-- Quickly check in dba_sql_plan_baseline to confirm the baseline exists
+ 
+ 
+ SELECT b.sql_handle, b.plan_name, b.enabled,b.sql_text
+ FROM   dba_sql_plan_baselines b, v$sql s
+ WHERE  s.sql_id='086u8d3zrrw84'
+ AND    s.exact_matching_signature = b.signature;
+ 
+SQL_HANDLE           SQL_TEXT                       PLAN_NAME                      ENA
+-------------------- ------------------------------ ------------------------------ ---
+SQL_bd68400ce785ea30  SQL_PLAN_buu201mmsbujh31f4d411
+
+
+
+ SQL_PLAN_0zu8csuqvzdg6d01d73d8
+
+--2. copy from good
+
+
+DECLARE
+ cnt NUMBER;
+BEGIN
+ cnt := sys.dbms_spm.load_plans_from_cursor_cache(
+               sql_id=>'2ndmc3n93dqfs', 
+               plan_hash_value=>'2507968708', 
+               sql_handle=>'SQL_bd68400ce785ea30');
+END;
+/
+
+
+ SELECT b.sql_handle, b.sql_text, b.plan_name, b.enabled
+  2  FROM   dba_sql_plan_baselines b, v$sql s
+  3  WHERE  s.sql_id='fgumtf1strwxa'
+  4  AND    s.exact_matching_signature = b.signature; 
+  
+  cb7urhwnw9agv
+
+MOVE baseline
+--https://sqlmaria.com/2020/02/25/how-to-use-a-sql-plan-baseline-or-a-sql-patch-to-add-optimizer-hints/
+
+bukcum5prk1mn / 1562133319 -- kotu
+4baprfg14c0zd / 4242837055 -- iyi
+
+--SPM FROM CACHE
+variable cnt number
+BEGIN
+    :cnt := DBMS_SPM.LOAD_PLANS_FROM_CURSOR_CACHE(sql_id => 'bukcum5prk1mn', plan_hash_value =>'1562133319', fixed => 'NO', enabled => 'NO');
+END;
+/
+print cnt
+
+
+
+ SELECT b.sql_handle, b.plan_name, b.enabled,b.sql_text, 
+ FROM   dba_sql_plan_baselines b, v$sql s
+ WHERE  s.sql_id='bukcum5prk1mn'
+ AND    s.exact_matching_signature = b.signature;
+ 
+SQL_c338ce1b13d6cbc8	SQL_PLAN_c6f6f3c9xdky8e8eb4272	NO
+
+DECLARE
+  cnt NUMBER;
+BEGIN
+  cnt := sys.dbms_spm.alter_sql_plan_baseline(
+               sql_handle=>'SQL_9f2dfa50fe627319', 
+               plan_name=>'SQL_PLAN_9ybgua3z64wstffe6128a', 
+               attribute_name=>'enabled', attribute_value=>'NO');
+END;
+/
+4baprfg14c0zd / 4242837055 -- iyi
+ 
+ DECLARE
+ cnt NUMBER;
+BEGIN
+ cnt := sys.dbms_spm.load_plans_from_cursor_cache(
+               sql_id=>'4baprfg14c0zd', 
+               plan_hash_value=>'4242837055', 
+               sql_handle=>'SQL_c338ce1b13d6cbc8');
+END;
+/
+
+5u9jfr1brwu11  / 3697412137
+DECLARE
+  cnt NUMBER;
+BEGIN
+  cnt := sys.dbms_spm.alter_sql_plan_baseline(
+               sql_handle=>'SQL_7bd39167b2fb78e1', 
+               plan_name=>'SQL_PLAN_7rnwjcytgqy713c0894e8', 
+               attribute_name=>'enabled', attribute_value=>'NO');
+END;
+/
+
+SET SERVEROUTPUT ON
+DECLARE
+  l_plans_altered  PLS_INTEGER;
+BEGIN
+  l_plans_altered := DBMS_SPM.alter_sql_plan_baseline(
+    sql_handle      => 'SQL_0fe90cc6adbfb5e6',
+    plan_name       => 'SQL_PLAN_0zu8csuqvzdg6d01d73d8',
+    attribute_name  => 'fixed',
+    attribute_value => 'YES');
+
+  DBMS_OUTPUT.put_line('Plans Altered: ' || l_plans_altered);
+END;
+/
+
+SQL_0fe90cc6adbfb5e6	SQL_PLAN_0zu8csuqvzdg6d01d73d8
